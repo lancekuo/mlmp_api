@@ -1,0 +1,8 @@
+{
+	"server": "10.1.101.119",
+	"userName": "Horus",
+	"password": 'Tr3nd$horus',
+	"options": {
+		"database": "ProductSetup_DEV"
+	}
+};
