@@ -1,38 +1,16 @@
 /*
  * GET Reference table, Languages, Countries and Type.
  */
+var util = require('../lib/util.js');
+var Base = require('../lib/base.js');
+var TYPES = require('tedious').TYPES;
 
 exports.IsValid = function(req, res){
-    var util = require('../lib/util.js');
-    var XSPDB = require('../db/XSPDB.json');
-    var TYPES = require('tedious').TYPES;
-    var SQL = "\
-SELECT TOP 1 [Channel].[ID] ,[Channel].[ChannelName] ,[Channel].[ServerName] ,[Channel].[DBName] ,[Channel].[DBUserID] \
-,[Channel].[DBPWD] ,[Channel].[ModifyBy] ,[Channel].[ModifyTime] ,[Channel].[DCCode] FROM [Channel] WITH (NOLOCK) \
-JOIN [GCtoken] ON [GCtoken].[GID] = [Channel].[ID] \
-WHERE [GCtoken].[Token] = @Token";
-  
+    var SQL = "SELECT * FROM MBMember WHERE UserID = @userid and UserPWD = @passwd and Status=1";
     var tenantid = req.headers['tenantid'];
-    var connection = util.createConnection(XSPDB, function(){
-        var params = [{
-            name: "Token",
-            type: TYPES.VarChar,
-            value: tenantid
-        }];
 
-        var request = util.createRequest(SQL, params, function(data){
-            msg1 = data[0];
-            findUserByUserIDAndPassword({
-                "server": XSPDB.server,
-                "userName": msg1.DBUserID,
-                "password": msg1.DBPWD,
-                "options": {
-                        "database": msg1.DBName
-                }
-            });
-        });
-        connection.execSql(request);
-    }, true);
+    var base = new Base(tenantid);
+    base.getConnByTenant(null, findUserByUserIDAndPassword);
 
     function findUserByUserIDAndPassword(config){
         var userid = util.encrypt(req.body.UserLoginID),
@@ -46,14 +24,13 @@ WHERE [GCtoken].[Token] = @Token";
             type: TYPES.VarChar,
             value: passwd       
         }];
-        SQL = "SELECT * FROM MBMember WHERE UserID = @userid and UserPWD = @passwd and Status=1";
-            
-        var xsp_connection = util.createConnection(config, function(){
-            xsp_request = util.createRequest(SQL, params, function(data){
+                    
+        var connection = util.createConnection(config, function(){
+            request = util.createRequest(SQL, params, function(data){
                 getUserRoleMappingByMemberID(config, data);
             });
-            xsp_connection.execSql(xsp_request);
-        }, true);
+            connection.execSql(request);
+        });
     }
 
     function getUserRoleMappingByMemberID(config, data){
@@ -71,10 +48,24 @@ WHERE MemberID = @memberid";
 
         var map_connection = util.createConnection(config, function(){
             map_request = util.createRequest(SQL, params, function(roleData){
-                data[0].RoleID = roleData[0];
-                res.send(data[0]);
+                var rtn = {
+                        "UserGUID" : data[0]["ID"],
+                        "FirstName" : util.decrypt(data[0]["FirstName"]),
+                        "LastName" : util.decrypt(data[0]["LastName"]),
+                        "TelephoneAreaCode" : util.decrypt(data[0]["TelephoneAreaCode"]),
+                        "Telephone" : util.decrypt(data[0]["Telephone"]),
+                        "TelephoneExtension" : util.decrypt(data[0]["TelephoneExt"]),
+                        "UserLoginID" : util.decrypt(data[0]["UserID"]),
+                        "Email" : util.decrypt(data[0]["Email"]),
+                        "LanguageCode" : data[0]["LanguageCode"],
+                        "TimeZone" : data[0]["TimeZoneCode"],
+                        "CompanyGUID" : data[0]["CompanyID"],
+                        "Status" : data[0]["Status"],
+                        "UserRole" : roleData[0].AZRoleID
+                };
+                res.send(rtn);
             });
             map_connection.execSql(map_request);
-        }, true);
+        });
     }
 };

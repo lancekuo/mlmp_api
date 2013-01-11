@@ -6,70 +6,15 @@ var util = require('../lib/util.js');
 var Base = require('../lib/base.js');
 var TYPES = require('tedious').TYPES;
 
-exports.getRFTable = function(req, res){
-    var SQL = "SELECT 'MemberRoleMap' AS RFItem , \
-(SELECT AZRoleTypeMapID AS 'key', RoleName AS 'string' FROM AZCompanyMemberRoleMap WITH(NOLOCK) ORDER BY AZRoleID, OrderNum FOR XML PATH(''), ROOT('dict'), TYPE) AS MapItem \
-UNION ALL \
-SELECT 'LicenseVersionTypeMap' AS RFItem , (SELECT VersionType AS 'key', DisplayName AS 'string' \
-FROM VersionType WITH(NOLOCK) \
-FOR XML PATH(''), ROOT('dict'), TYPE) AS MapItem \
-UNION ALL \
-SELECT 'LanguageMap' AS RFItem , (SELECT LanguageCode AS 'key', DisplayName AS 'string' \
-FROM LCLanguage WITH(NOLOCK) \
-ORDER BY DisplayName \
-FOR XML PATH(''), ROOT('dict'), TYPE) AS MapItem";
-    var connection = util.createConnection(XSPDB, function(){
-        var request = util.createRequest(SQL, [], function(data){
-            res.send(data);
-        });
-        connection.execSql(request);
-    }, true);
-};
+exports.createServicePlanBinding = function(req, res){
 
-exports.getTop10SeatCountCompany = function(req, res){
-    var SQL = " WITH tmp AS ( \
-    SELECT CompanyID \
-    , ROW_NUMBER() OVER(PARTITION BY CompanyID ORDER BY Volume DESC) AS Row \
-    FROM MBCompanySrv WITH(NOLOCK) \
-    WHERE Enabled=1 \
-    AND VersionType=1 \
-    AND IsActivate=1 \
-    AND LED >= GETUTCDATE() \
-    AND CompanyID IN ( \
-        SELECT ID \
-        FROM MBCompany WITH(NOLOCK) \
-        WHERE RoleID=6 AND (PID=@VendorCompanyID OR CreateByCompanyID=@VendorCompanyID) \
-    ) \
-) \
-SELECT ID, CompanyName, CountryCode, Address, AddressCity, AddressState, AddressPostalCode \
-, (SELECT CompanyID, ID, UserID, FirstName, LastName, TelephoneAreaCode, Telephone, TelephoneExt, Email, Status \
-    , ISNULL((SELECT TOP 1 AZRoleTypeMapID FROM MBMemberRoleMap WHERE MemberID=MBMember.ID),0) AS UserRole \
-    , LanguageCode, TimeZoneCode \
-    FROM MBMember WITH(NOLOCK) \
-    WHERE CompanyID=MBCompany.ID \
-    FOR XML PATH('Member'), ROOT('Members'), TYPE) AS Member \
-, (SELECT CompanyID, ID, PolicyName, VersionType, CONVERT(VARCHAR(10), LED, 120) AS LED, Volume, IsAutoReNew, DATEDIFF(day, GETUTCDATE(), LED) \
-    FROM MBCompanySrv WITH(NOLOCK) \
-    WHERE CompanyID=MBCompany.ID \
-    AND Enabled=1 \
-    ORDER BY \
-        CASE WHEN VersionType=1 AND IsActivate=1 AND LED >= GETUTCDATE() \
-        THEN \
-            Volume \
-        ELSE \
-            -2147483648 \
-        END DESC \
-    FOR XML PATH('License'), ROOT('Licenses'), TYPE) AS License \
-FROM MBCompany \
-WITH(NOLOCK) \
-WHERE ID IN (SELECT TOP 10 CompanyID FROM tmp WHERE Row=1)";
     var tenantid = req.headers['tenantid'];
     var vendorid = req.query.vendor;
 
     var base = new Base(tenantid);
-    base.getConnByTenant(null, GetTop10SeatCountCustomerCompany);
+    base.getConnByTenant(null, CreateServicePlanBinding);
 
-    function GetTop10SeatCountCustomerCompany(config){
+    function CreateServicePlanBinding(config){
         var connection = util.createConnection(config, function(){
             var params = [{
                 name: "VendorCompanyID",
