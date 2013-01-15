@@ -23,7 +23,7 @@ WHERE [CompanyID]=@VendorCompanyID \
             var params = [{
                 name: "VendorCompanyID",
                 type: TYPES.VarChar,
-                value: config._MyCompanyGUID
+                value: config.MyCompany.CompanyGUID
             }];
             var request = util.createRequest(SQL, params, function(data){
                 postProcess(data);
