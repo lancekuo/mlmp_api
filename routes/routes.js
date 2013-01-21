@@ -14,5 +14,5 @@ module.exports = function(app){
 	app.post('/company/FindCompanyByKeyword', company.findCompanyByKeyword);
 	app.get('/company/GetCustomerCompanyByGUID/:GUID', company.getCustomerCompanyByGUID);
 	app.get('/serviceplan', serviceplan.findAvailableServicePlans);
-	app.post('/serviceplanibinding', serviceplanbinding.createServicePlanBinding);
+	app.post('/serviceplanbinding', serviceplanbinding.createServicePlanBinding);
 }

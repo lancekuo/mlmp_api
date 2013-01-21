@@ -146,7 +146,7 @@ WHERE Row BETWEEN @StartNum AND @EndNum \
 exports.getCustomerCompanyByGUID = function(req, res){
     var SQL = "\
 WITH tmp AS ( \
-SELECT ID, dbo.Decrypt(CompanyName) AS CompanyName, CountryCode, dbo.Decrypt(Address) AS Address, AddressCity, AddressState, AddressPostalCode \
+SELECT ID, dbo.Decrypt(Note) as Note, dbo.Decrypt(CompanyName) AS CompanyName, CountryCode, dbo.Decrypt(Address) AS Address, AddressCity, AddressState, AddressPostalCode \
 , (SELECT CompanyID, ID, UserID, FirstName, LastName, TelephoneAreaCode, Telephone, TelephoneExt, Email, Status \
     , ISNULL((SELECT TOP 1 AZRoleTypeMapID FROM MBMemberRoleMap WHERE MemberID=MBMember.ID),0) AS UserRole \
     , LanguageCode, TimeZoneCode \
@@ -204,6 +204,7 @@ SELECT * FROM tmp";
                    State: ref.AddressState,
                    StreetAddress: ref.Address
                },
+               Note: (ref.Note.length == 0)? null:ref.Note,
                Users: '',
                Licenses: ''
             };
@@ -245,7 +246,7 @@ SELECT * FROM tmp";
                         PolicyName: ref_license.PolicyName,
                         VersionType: ref_license.VersionType,
                         LED: ref_license.LED,
-                        Volumn: ref_license.Volumn,
+                        Volume: ref_license.Volume,
                         IsAutoReNew: ref_license.IsAutoReNew
                     };
                     licenses.push(license);
@@ -255,7 +256,7 @@ SELECT * FROM tmp";
             company.Licenses = licenses;
             companys.push(company);
         }
-        res.send(companys);
+        res.json(companys);
     };
 };
 
@@ -435,36 +436,81 @@ WHERE ID=@CompanyGUID) as 'GroupString'";
             v += "'"+roleMapHistoryEntity[key]+"' ,";
         }
         RoleMapHistorySQL = require('util').format(RoleMapHistorySQL, f.substr(0, f.length-1), v.substr(0, v.length-1));
-        var connection = util.createConnection(config, function(){
-            var sql = CompanySQL+MemberSQL+RoleMapSQL+RoleMapHistorySQL;
-            connection.beginTransaction(function(err){
+        this.createCompanySQL = CompanySQL+MemberSQL+RoleMapSQL+RoleMapHistorySQL;
+        this.config = config;
+        this.userEntity = userEntity;
+        this.tranConn = util.createConnection(config, function(){
+            this.tranConn.beginTransaction(function(err){
                 
-                var tranReq = util.createRequest(sql, [], function(data){
-
-                    connection.commitTransaction(function(){
-                        findCompanyByGUID(config, userEntity);
-                    });
-                }, function(err){
-                    console.log(err);
-                    connection.rollbackTransaction(function(err){console.log(err);});
-                });
-                connection.execSql(tranReq); 
+                var tranReq = isCompanyNameExists(company.CompanyName, this.userEntity.UserID);
+                this.tranConn.execSql(tranReq); 
             });
         });
     };
-    function findCompanyByGUID(config, member){
 
+    function isCompanyNameExists(companyName, userID){
+        var SQL = "SELECT ID FROM MBCompany WHERE CompanyName=@companyName";
+        var params = [{
+            name: "companyName",
+            type: TYPES.VarChar,
+            value: companyName
+        }];
+        return util.createRequest(SQL, params, function(data){
+            if(data.length == 0){
+                this.tranConn.execSql(isUserIDExists(userID));
+            }else{
+                this.tranConn.rollbackTransaction(function(err){console.log('Rollback: ', err);});
+                res.json(490,{Code: "0x00025005",Message: "The specified Company Name already exists.",AdditionalMessage:""});
+            }
+
+        }, function(err){
+            console.log(err);
+            this.tranConn.rollbackTransaction(function(err){console.log(err);});
+        });
+    };
+
+    function isUserIDExists(userID){
+        var SQL = "SELECT ID FROM MBMember WHERE UserID=@userID";
+        var params = [{
+            name: "userID",
+            type: TYPES.VarChar,
+            value: userID
+        }];
+        return util.createRequest(SQL, params, function(data){
+            if(data.length == 0){
+                this.tranConn.execSql(insertInto());
+            }else{
+                this.tranConn.rollbackTransaction(function(err){console.log('Rollback: ', err);});
+                res.json(490,{Code: "0x00015001",Message: "The specified User ID already exists in database.",AdditionalMessage:""});
+            }
+
+        }, function(err){
+            console.log(err);
+            this.tranConn.rollbackTransaction(function(err){console.log(err);});
+        });
+    };
+    function insertInto(){
+        return util.createRequest(this.createCompanySQL, [], function(data){
+            this.tranConn.commitTransaction(function(){
+                findCompanyByGUID();
+            });
+        }, function(err){
+            console.log(err);
+            this.tranConn.rollbackTransaction(function(err){console.log(err);});
+        });
+    };
+    function findCompanyByGUID(){
         var SQL = "SELECT [ID], [GC] FROM MBCompany WHERE ID=@CompanyID";
-        var connection = util.createConnection(config, function(){
+        var connection = util.createConnection(this.config, function(){
             var params = [{
                 name: "CompanyID",
                 type: TYPES.VarChar,
-                value: member.CompanyID 
+                value: this.userEntity.CompanyID 
             }];
             var request = util.createRequest(SQL, params, function(data){
                 var rtn = {
-                    CompanyGUID: member.CompanyID,
-                    UserGUID: member.ID,
+                    CompanyGUID: this.userEntity.CompanyID,
+                    UserGUID: this.userEntity.ID,
                     TenantID: data[0].GC.match(/T=(.*)$/)[1]
                 };
                 res.json(rtn);

@@ -8,10 +8,12 @@ var TYPES = require('tedious').TYPES;
 
 exports.findAvailableServicePlans = function(req, res){
     var SQL = "\
-SELECT [ID] ,[PolicyName] ,[ServiceID] ,[BUCode] ,[LicensePeriodM] ,[DaysToExpire] ,[IsAutoReNew] \
-FROM [dbo].[vwPLSubscriptionPolicyALL] \
-WHERE [CompanyID]=@VendorCompanyID \
-";
+SELECT ID ,PolicyName ,ServiceID ,BUCode ,LicensePeriodM ,DaysToExpire ,IsAutoReNew \
+FROM vwPLSubscriptionPolicyALL \
+WHERE CompanyID=@VendorCompanyID \
+AND ActivationType=1 \
+AND Enabled=1 \
+AND ContractType='Saas'";
 
     var tenantid = req.headers['tenantid'];
 
